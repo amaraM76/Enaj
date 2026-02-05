@@ -21,7 +21,7 @@ const SEAMOSS = '#7DB87D';
 const SEAMOSS_DARK = '#5A9A5A';
 
 // API Configuration - Change this to your server IP when testing
-const API_BASE_URL = 'http://192.168.1.100:3000'; // Update with your computer's IP
+const API_BASE_URL = 'https://your-codespace-name-3000.app.github.dev'; // Update with your computer's IP
 
 // Fallback data for offline mode
 const AILMENTS_DATA = [
