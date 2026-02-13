@@ -7,7 +7,7 @@ const { initDatabase, run, get, all, saveDatabase } = require('./database');
 const { AILMENTS_DATA, PERSONAL_PREFERENCES, getAvoidListForAilment, getAilmentInfo } = require('./ailmentsData');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'enaj-secret-key-change-in-production';
 
 // Middleware
@@ -411,6 +411,24 @@ app.get('/api/user/scan-history', authenticateToken, (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch scan history' });
   }
+});
+
+// ============== ROOT ROUTE ==============
+
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Enaj API Server',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth/*',
+      user: '/api/user/*',
+      ailments: '/api/ailments',
+      preferences: '/api/preferences',
+      scan: '/api/scan/*'
+    },
+    docs: 'See README.md for API documentation'
+  });
 });
 
 // ============== HEALTH CHECK ==============

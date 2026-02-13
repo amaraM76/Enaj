@@ -7,6 +7,198 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    // API Service for Enaj Web App (embedded)
+    const API_BASE_URL = 'http://localhost:3001';
+
+    class ApiService {
+      constructor() {
+        this.token = null;
+        this.init();
+      }
+
+      init() {
+        try {
+          this.token = localStorage.getItem('enaj_auth_token');
+        } catch (e) {
+          console.error('Failed to load token:', e);
+        }
+      }
+
+      setToken(token) {
+        this.token = token;
+        try {
+          localStorage.setItem('enaj_auth_token', token);
+        } catch (e) {
+          console.error('Failed to save token:', e);
+        }
+      }
+
+      clearToken() {
+        this.token = null;
+        try {
+          localStorage.removeItem('enaj_auth_token');
+        } catch (e) {
+          console.error('Failed to clear token:', e);
+        }
+      }
+
+      async request(endpoint, options = {}) {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const headers = {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        };
+
+        if (this.token) {
+          headers['Authorization'] = `Bearer ${this.token}`;
+        }
+
+        try {
+          const response = await fetch(url, {
+            ...options,
+            headers,
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Request failed');
+          }
+
+          return data;
+        } catch (error) {
+          console.error('API request failed:', error);
+          throw error;
+        }
+      }
+
+      async register(email, password, name) {
+        const data = await this.request('/api/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, name }),
+        });
+        if (data.token) {
+          this.setToken(data.token);
+        }
+        return data;
+      }
+
+      async login(email, password) {
+        const data = await this.request('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        });
+        if (data.token) {
+          this.setToken(data.token);
+        }
+        return data;
+      }
+
+      async guestLogin(name) {
+        const data = await this.request('/api/auth/guest', {
+          method: 'POST',
+          body: JSON.stringify({ name }),
+        });
+        if (data.token) {
+          this.setToken(data.token);
+        }
+        return data;
+      }
+
+      async logout() {
+        this.clearToken();
+      }
+
+      async getProfile() {
+        return this.request('/api/user/profile');
+      }
+
+      async updateName(name) {
+        return this.request('/api/user/name', {
+          method: 'PUT',
+          body: JSON.stringify({ name }),
+        });
+      }
+
+      async getAilmentsData() {
+        return this.request('/api/ailments');
+      }
+
+      async getUserAilments() {
+        return this.request('/api/user/ailments');
+      }
+
+      async setUserAilments(ailments) {
+        return this.request('/api/user/ailments', {
+          method: 'PUT',
+          body: JSON.stringify({ ailments }),
+        });
+      }
+
+      async addCustomAilment(ailmentText) {
+        return this.request('/api/user/custom-ailment', {
+          method: 'POST',
+          body: JSON.stringify({ ailmentText }),
+        });
+      }
+
+      async getPreferencesData() {
+        return this.request('/api/preferences');
+      }
+
+      async getUserPreferences() {
+        return this.request('/api/user/preferences');
+      }
+
+      async setUserPreferences(preferences) {
+        return this.request('/api/user/preferences', {
+          method: 'PUT',
+          body: JSON.stringify({ preferences }),
+        });
+      }
+
+      async removeIngredient(ailmentName, ingredientName) {
+        return this.request('/api/user/remove-ingredient', {
+          method: 'POST',
+          body: JSON.stringify({ ailmentName, ingredientName }),
+        });
+      }
+
+      async restoreIngredient(ailmentName, ingredientName) {
+        return this.request('/api/user/restore-ingredient', {
+          method: 'POST',
+          body: JSON.stringify({ ailmentName, ingredientName }),
+        });
+      }
+
+      async getRemovedIngredients() {
+        return this.request('/api/user/removed-ingredients');
+      }
+
+      async getAvoidList() {
+        return this.request('/api/user/avoid-list');
+      }
+
+      async analyzeProduct(productName, productBrand, productPrice, ingredients) {
+        return this.request('/api/scan/analyze', {
+          method: 'POST',
+          body: JSON.stringify({ productName, productBrand, productPrice, ingredients }),
+        });
+      }
+
+      async getScanHistory() {
+        return this.request('/api/user/scan-history');
+      }
+
+      async healthCheck() {
+        return this.request('/api/health');
+      }
+    }
+
+    const api = new ApiService();
+    window.enajApi = api;
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,7 +211,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     const TIFFANY = "#81D8D0";
     const TIFFANY_LIGHT = "#B5E8E3";
@@ -28,73 +220,9 @@
     const SEAMOSS_LIGHT = "#A8D4A8";
     const SEAMOSS_DARK = "#5A9A5A";
 
-    const AILMENTS_DATA = [
-      {
-        category: "Skin Conditions",
-        items: [
-          { name: "Eczema", icon: "🧴", avoid: ["Fragrance/Parfum", "Sodium Lauryl Sulfate (SLS)", "Alcohol Denat", "Parabens", "Formaldehyde", "Lanolin", "Propylene Glycol", "Cocamidopropyl Betaine", "Essential Oils"] },
-          { name: "Rosacea", icon: "🌹", avoid: ["Alcohol Denat", "Fragrance/Parfum", "Menthol", "Witch Hazel", "Eucalyptus Oil", "Peppermint", "Salicylic Acid", "Retinol", "Sodium Lauryl Sulfate (SLS)"] },
-          { name: "Psoriasis", icon: "💧", avoid: ["Fragrance/Parfum", "Alcohol Denat", "Sulfates", "Parabens", "Formaldehyde", "Coal Tar (in some contexts)", "Salicylic Acid (high %)", "Essential Oils"] },
-          { name: "Acne-Prone Skin", icon: "✨", avoid: ["Coconut Oil", "Isopropyl Myristate", "Algae Extract", "Lanolin", "Cocoa Butter", "Sodium Lauryl Sulfate (SLS)", "Mineral Oil", "Silicones (heavy)"] },
-          { name: "Contact Dermatitis", icon: "⚡", avoid: ["Fragrance/Parfum", "Nickel", "Formaldehyde", "Preservatives (MI/MCI)", "Lanolin", "Balsam of Peru", "Parabens", "Cobalt Chloride"] },
-          { name: "Sensitive Skin", icon: "🪶", avoid: ["Fragrance/Parfum", "Alcohol Denat", "Sulfates", "Parabens", "Essential Oils", "Retinol", "AHA/BHA (high %)", "Synthetic Dyes"] },
-        ]
-      },
-      {
-        category: "Digestive & Food",
-        items: [
-          { name: "Celiac Disease", icon: "🌾", avoid: ["Gluten", "Wheat", "Barley", "Rye", "Malt", "Brewer's Yeast", "Hydrolyzed Wheat Protein", "Modified Food Starch (wheat-based)"] },
-          { name: "IBS", icon: "🫃", avoid: ["High-FODMAP Foods", "Artificial Sweeteners", "Lactose", "Fructose (excess)", "Sugar Alcohols (sorbitol, mannitol)", "Caffeine", "Inulin/Chicory Root", "Garlic & Onion Powder"] },
-          { name: "Crohn's Disease", icon: "🩺", avoid: ["High-Fiber Insoluble Foods", "Lactose", "Artificial Sweeteners", "Spicy Ingredients", "High-Fat Foods", "Alcohol", "Caffeine", "Raw Vegetables"] },
-          { name: "Lactose Intolerance", icon: "🥛", avoid: ["Lactose", "Milk Solids", "Whey", "Casein", "Cream", "Butter (in large amounts)", "Milk Powder", "Cheese (aged may be OK)"] },
-          { name: "GERD / Acid Reflux", icon: "🔥", avoid: ["Citric Acid (high amounts)", "Caffeine", "Chocolate", "Peppermint", "Tomato-Based Ingredients", "Spicy Ingredients", "Carbonation", "High-Fat Foods"] },
-          { name: "Food Allergies (Nut)", icon: "🥜", avoid: ["Tree Nuts", "Peanuts", "Peanut Oil", "Almond Extract", "Nutella-type Spreads", "Marzipan", "Praline", "Mixed Nuts"] },
-          { name: "Food Allergies (Shellfish)", icon: "🦐", avoid: ["Shrimp", "Crab", "Lobster", "Glucosamine (shellfish-derived)", "Chitosan", "Carrageenan (sometimes cross-reactive)", "Fish Sauce"] },
-          { name: "Food Allergies (Soy)", icon: "🫘", avoid: ["Soy Lecithin", "Soy Protein", "Soybean Oil", "Tofu", "Edamame", "Miso", "Tempeh", "Textured Vegetable Protein"] },
-          { name: "Food Allergies (Egg)", icon: "🥚", avoid: ["Egg Whites", "Egg Yolks", "Albumin", "Lysozyme", "Mayonnaise", "Meringue", "Lecithin (egg-derived)"] },
-        ]
-      },
-      {
-        category: "Neurological & Chronic",
-        items: [
-          { name: "Parkinson's Disease", icon: "🧠", avoid: ["Artificial Sweeteners (Aspartame)", "High Iron Supplements", "Pesticide Residues", "BPA", "Lead", "Mercury", "Aluminum (in some products)"] },
-          { name: "Migraines", icon: "🤕", avoid: ["Tyramine", "MSG", "Nitrates/Nitrites", "Artificial Sweeteners (Aspartame)", "Sulfites", "Caffeine (excess)", "Alcohol", "Aged Cheese"] },
-          { name: "Multiple Sclerosis", icon: "🔬", avoid: ["Saturated Fats (excess)", "Processed Sugars", "Gluten (some patients)", "Artificial Additives", "Excess Sodium", "Dairy (some patients)"] },
-          { name: "Epilepsy", icon: "⚕️", avoid: ["Artificial Sweeteners (Aspartame)", "MSG", "Excess Caffeine", "Alcohol", "Grapefruit (drug interactions)"] },
-          { name: "Dementia / Alzheimer's", icon: "🧩", avoid: ["Aluminum (in products)", "Excess Sodium", "Trans Fats", "Nitrates/Nitrites", "Artificial Sweeteners (Aspartame)", "High-Mercury Fish", "Processed Meats", "Excess Alcohol"] },
-          { name: "Fibromyalgia", icon: "💫", avoid: ["MSG", "Artificial Sweeteners (Aspartame)", "Gluten (some patients)", "Caffeine (excess)", "Processed Foods", "Nightshade Vegetables", "Sugar (excess)", "Food Dyes"] },
-          { name: "ADHD", icon: "⚡", avoid: ["Artificial Food Dyes (Red 40, Yellow 5, Yellow 6)", "Artificial Sweeteners", "MSG", "High-Fructose Corn Syrup", "Sodium Benzoate", "Excess Sugar", "Salicylates (some patients)"] },
-          { name: "Autism (Sensory Sensitivities)", icon: "🌈", avoid: ["Artificial Food Dyes", "Artificial Flavors", "MSG", "Casein", "Gluten (some individuals)", "Artificial Preservatives", "High-Fructose Corn Syrup", "Soy (some individuals)"] },
-          { name: "Chronic Fatigue Syndrome", icon: "🔋", avoid: ["Caffeine (excess)", "Refined Sugars", "Alcohol", "Artificial Sweeteners", "Processed Foods", "Gluten (some patients)", "Dairy (some patients)"] },
-          { name: "Neuropathy", icon: "🫳", avoid: ["Alcohol", "Excess Sugar", "Gluten (some patients)", "Artificial Sweeteners", "Heavy Metals (Mercury, Lead)", "MSG"] },
-        ]
-      },
-      {
-        category: "Autoimmune & Inflammatory",
-        items: [
-          { name: "Lupus", icon: "🦋", avoid: ["Alfalfa Sprouts", "Garlic (large amounts)", "Echinacea", "Sulfites", "High Sodium", "Processed Foods", "Alcohol"] },
-          { name: "Rheumatoid Arthritis", icon: "🦴", avoid: ["Refined Sugars", "Omega-6 (excess)", "Fried Foods", "Gluten (some patients)", "Alcohol", "Processed Meats", "AGEs (Advanced Glycation End-products)"] },
-          { name: "Hashimoto's", icon: "🦋", avoid: ["Excess Iodine", "Gluten (some patients)", "Soy (excess)", "Goitrogens (raw cruciferous, excess)", "Highly Processed Foods", "Artificial Sweeteners"] },
-          { name: "Type 1 Diabetes", icon: "💉", avoid: ["Added Sugars", "High-Glycemic Ingredients", "Trans Fats", "Excess Sodium", "Artificial Sweeteners (some)"] },
-          { name: "Type 2 Diabetes", icon: "📊", avoid: ["Added Sugars", "High-Fructose Corn Syrup", "Refined Carbohydrates", "Trans Fats", "Excess Sodium", "Artificial Sweeteners (some)"] },
-        ]
-      },
-      {
-        category: "Respiratory & Allergies",
-        items: [
-          { name: "Asthma", icon: "🫁", avoid: ["Sulfites", "Sodium Bisulfite", "Tartrazine (Yellow #5)", "Aspirin-related compounds", "MSG", "Strong Fragrances"] },
-          { name: "Seasonal Allergies", icon: "🤧", avoid: ["Pollen-Cross-Reactive Foods", "Histamine-Rich Foods", "Sulfites", "Artificial Colors", "Preservatives (Benzoates)"] },
-          { name: "Mast Cell Disorder (MCAS)", icon: "🔴", avoid: ["Histamine-Rich Foods", "Alcohol", "Fermented Foods", "Aged Cheeses", "Artificial Preservatives", "Sulfites", "Artificial Colors", "Benzoates"] },
-        ]
-      },
-    ];
-
-    const PERSONAL_PREFERENCES = [
-      { category: "Artificial Additives", items: ["Artificial Sweeteners", "Artificial Colors/Dyes", "Artificial Flavors", "Artificial Fragrances/Parfum", "MSG", "High-Fructose Corn Syrup", "Artificial Preservatives", "Sodium Benzoate", "Potassium Sorbate", "BHT / BHA"] },
-      { category: "Chemicals & Compounds", items: ["Parabens", "Phthalates", "Sulfates (SLS/SLES)", "Formaldehyde", "Triclosan", "BPA / BPS", "Aluminum Compounds", "Petroleum / Mineral Oil", "Silicones", "PEGs (Polyethylene Glycols)", "Oxybenzone", "Talc", "Propylene Glycol", "Phenoxyethanol"] },
-      { category: "Lifestyle & Diet", items: ["Non-Organic", "GMO Ingredients", "Animal Products (Vegan)", "Animal Testing (Not Cruelty-Free)", "Dairy", "Gluten", "Soy", "Palm Oil", "Alcohol (in skin products)", "Alcohol (in food/beverages)", "Caffeine", "Refined Sugar", "Trans Fats", "Seed Oils (Canola, Soybean, Sunflower, Safflower)", "Food Dyes (Red 40, Yellow 5, Yellow 6, Blue 1)", "Gums & Thickeners (Xanthan, Guar, Carrageenan)", "Citric Acid (manufactured)", "Nitrates / Nitrites", "Sodium Nitrate", "Maltodextrin", "Natural Flavors (undisclosed)", "Carrageenan", "Corn Syrup / Corn Starch", "Canola Oil", "Vegetable Oil (unspecified)", "Soy Lecithin", "Cellulose / Powdered Cellulose", "Titanium Dioxide"] },
-      { category: "Environmental & Ethical", items: ["Non-Recyclable Packaging", "Microplastics", "Non-Biodegradable Ingredients", "Single-Use Plastics", "Bleached Fabrics / Chlorine-Bleached", "Formaldehyde-Treated Textiles", "PFAS / Forever Chemicals", "Synthetic Microfibers", "Non-Fair-Trade", "Tested on Animals", "Unsustainable Palm Oil", "Excess Plastic Packaging", "Non-Compostable Materials"] },
-    ];
+    // These will be loaded from backend
+    let AILMENTS_DATA = [];
+    let PERSONAL_PREFERENCES = [];
 
     const DEMO_PRODUCTS = {
       scanned: {
@@ -143,19 +271,123 @@
       const [scanning, setScanning] = useState(false);
       const [expandedCategories, setExpandedCategories] = useState({});
       const [removedIngredients, setRemovedIngredients] = useState({});
+      const [loading, setLoading] = useState(true);
+      const [apiError, setApiError] = useState(null);
+      const [ailmentsDataLoaded, setAilmentsDataLoaded] = useState(false);
+      const [preferencesDataLoaded, setPreferencesDataLoaded] = useState(false);
+
+      // Load data from backend on mount
+      useEffect(() => {
+        const loadInitialData = async () => {
+          try {
+            setLoading(true);
+            // Check if user is already authenticated
+            const token = localStorage.getItem('enaj_auth_token');
+            
+            if (token) {
+              // Load user profile
+              try {
+                const profile = await window.enajApi.getProfile();
+                setUserName(profile.user.name || '');
+                setSelectedAilments(profile.ailments || []);
+                setSelectedPrefs(profile.preferences || []);
+                if (profile.removedIngredients) {
+                  setRemovedIngredients(profile.removedIngredients);
+                }
+                // If user has data, go to home screen
+                if (profile.ailments.length > 0 || profile.preferences.length > 0) {
+                  setScreen(screens.HOME);
+                }
+              } catch (e) {
+                // Token might be invalid, clear it
+                localStorage.removeItem('enaj_auth_token');
+              }
+            }
+            
+            // Load ailments and preferences data
+            const [ailmentsData, prefsData] = await Promise.all([
+              window.enajApi.getAilmentsData(),
+              window.enajApi.getPreferencesData()
+            ]);
+            
+            AILMENTS_DATA = ailmentsData;
+            PERSONAL_PREFERENCES = prefsData;
+            setAilmentsDataLoaded(true);
+            setPreferencesDataLoaded(true);
+            setLoading(false);
+          } catch (error) {
+            console.error('Failed to load initial data:', error);
+            setApiError('Failed to connect to backend. Please make sure the server is running on http://localhost:3001');
+            setLoading(false);
+          }
+        };
+        
+        loadInitialData();
+      }, []);
 
       const navigateTo = (s) => { setAnimateIn(false); setTimeout(() => { setScreen(s); setAnimateIn(true); }, 200); };
-      const toggleAilment = (name) => setSelectedAilments(prev => prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]);
-      const togglePref = (name) => setSelectedPrefs(prev => prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]);
+      
+      const toggleAilment = async (name) => {
+        const newAilments = selectedAilments.includes(name) 
+          ? selectedAilments.filter(a => a !== name) 
+          : [...selectedAilments, name];
+        setSelectedAilments(newAilments);
+        
+        // Save to backend
+        if (window.enajApi.token) {
+          try {
+            await window.enajApi.setUserAilments(newAilments);
+          } catch (error) {
+            console.error('Failed to save ailments:', error);
+          }
+        }
+      };
+      
+      const togglePref = async (name) => {
+        const newPrefs = selectedPrefs.includes(name)
+          ? selectedPrefs.filter(p => p !== name)
+          : [...selectedPrefs, name];
+        setSelectedPrefs(newPrefs);
+        
+        // Save to backend
+        if (window.enajApi.token) {
+          try {
+            await window.enajApi.setUserPreferences(newPrefs);
+          } catch (error) {
+            console.error('Failed to save preferences:', error);
+          }
+        }
+      };
+      
       const toggleCategory = (cat) => setExpandedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
 
-      const removeIngredientFromAilment = (ailment, ingredient) => {
+      const removeIngredientFromAilment = async (ailment, ingredient) => {
         setRemovedIngredients(prev => ({ ...prev, [ailment]: [...(prev[ailment] || []), ingredient] }));
+        
+        // Save to backend
+        if (window.enajApi.token) {
+          try {
+            await window.enajApi.removeIngredient(ailment, ingredient);
+          } catch (error) {
+            console.error('Failed to remove ingredient:', error);
+          }
+        }
       };
-      const restoreIngredientToAilment = (ailment, ingredient) => {
+      
+      const restoreIngredientToAilment = async (ailment, ingredient) => {
         setRemovedIngredients(prev => ({ ...prev, [ailment]: (prev[ailment] || []).filter(i => i !== ingredient) }));
+        
+        // Save to backend
+        if (window.enajApi.token) {
+          try {
+            await window.enajApi.restoreIngredient(ailment, ingredient);
+          } catch (error) {
+            console.error('Failed to restore ingredient:', error);
+          }
+        }
       };
       const getActiveIngredientsForAilment = (ailmentName) => {
+        if (!AILMENTS_DATA || AILMENTS_DATA.length === 0) return [];
         const item = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === ailmentName);
         if (!item) return [];
         return item.avoid.filter(ing => !(removedIngredients[ailmentName] || []).includes(ing));
@@ -173,8 +405,12 @@
         selectedAilments.forEach(ailmentName => {
           const active = getActiveIngredientsForAilment(ailmentName);
           if (active.some(ing => ing.toLowerCase().includes(fL) || fL.includes(ing.toLowerCase()))) {
-            const item = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === ailmentName);
-            reasons.ailments.push({ name: ailmentName, icon: item?.icon || "🩺" });
+            if (AILMENTS_DATA && AILMENTS_DATA.length > 0) {
+              const item = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === ailmentName);
+              reasons.ailments.push({ name: ailmentName, icon: item?.icon || "🩺" });
+            } else {
+              reasons.ailments.push({ name: ailmentName, icon: "🩺" });
+            }
           }
         });
         const matchedPref = selectedPrefs.find(p => p.toLowerCase().includes(fL) || fL.includes(p.toLowerCase()));
@@ -182,7 +418,81 @@
         return reasons;
       };
 
-      const handleScan = () => { setScanning(true); setTimeout(() => { setScanning(false); navigateTo(screens.SCAN_RESULT); }, 2200); };
+      const handleScan = async () => {
+        setScanning(true);
+        
+        // Demo product data
+        const demoProduct = {
+          name: "SunShield UV Face Sunscreen SPF 50",
+          brand: "GlowDerm",
+          price: "$24.99",
+          ingredients: "Water, Homosalate, Octisalate, Zinc Oxide, Alcohol Denat, Butyloctyl Salicylate, Oxybenzone, Fragrance, Dimethicone, Glycerin, Silica, BHT, Phenoxyethanol"
+        };
+        
+        try {
+          if (window.enajApi.token) {
+            // Use backend API for scanning
+            const result = await window.enajApi.analyzeProduct(
+              demoProduct.name,
+              demoProduct.brand,
+              demoProduct.price,
+              demoProduct.ingredients
+            );
+            
+            // Process result and show scan result screen
+            setTimeout(() => {
+              setScanning(false);
+              // Store scan result for ScanResultScreen
+              window.lastScanResult = {
+                product: {
+                  name: demoProduct.name,
+                  brand: demoProduct.brand,
+                  price: demoProduct.price,
+                  image: "☀️",
+                  flagged: result.flaggedIngredients.map(f => f.ingredient)
+                },
+                result: result
+              };
+              navigateTo(screens.SCAN_RESULT);
+            }, 500);
+          } else {
+            // Fallback to demo mode
+            setTimeout(() => {
+              setScanning(false);
+              navigateTo(screens.SCAN_RESULT);
+            }, 2200);
+          }
+        } catch (error) {
+          console.error('Scan failed:', error);
+          setScanning(false);
+          // Still show result screen with demo data
+          navigateTo(screens.SCAN_RESULT);
+        }
+      };
+
+      if (loading) {
+        return (
+          <div style={{ width: "100%", minHeight: "100vh", background: "linear-gradient(165deg, #f0faf9 0%, #f5f9f5 40%, #eaf7f6 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Libre Franklin', sans-serif" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🛡️</div>
+              <p style={{ color: "#7a8a8e", fontSize: 16 }}>Loading Enaj...</p>
+            </div>
+          </div>
+        );
+      }
+
+      if (apiError) {
+        return (
+          <div style={{ width: "100%", minHeight: "100vh", background: "linear-gradient(165deg, #f0faf9 0%, #f5f9f5 40%, #eaf7f6 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Libre Franklin', sans-serif", padding: 20 }}>
+            <div style={{ textAlign: "center", maxWidth: 400 }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+              <p style={{ color: "#c44", fontSize: 16, marginBottom: 8, fontWeight: 600 }}>Connection Error</p>
+              <p style={{ color: "#7a8a8e", fontSize: 14, lineHeight: 1.6 }}>{apiError}</p>
+              <button onClick={() => window.location.reload()} style={{ marginTop: 20, background: `linear-gradient(135deg, ${TIFFANY}, ${SEAMOSS})`, color: "white", border: "none", padding: "12px 24px", borderRadius: 25, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Retry</button>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div style={{ width: "100%", minHeight: "100vh", background: "linear-gradient(165deg, #f0faf9 0%, #f5f9f5 40%, #eaf7f6 100%)", fontFamily: "'Libre Franklin', 'Avenir', 'Segoe UI', sans-serif", position: "relative", overflow: "hidden" }}>
@@ -226,6 +536,30 @@
     }
 
     function WelcomeScreen({ userName, setUserName, onNext }) {
+      const [loading, setLoading] = useState(false);
+      
+      const handleGetStarted = async () => {
+        if (!userName.trim()) {
+          alert('Please enter your name');
+          return;
+        }
+        
+        setLoading(true);
+        try {
+          // Create guest account with backend
+          await window.enajApi.guestLogin(userName.trim());
+          // Update name in backend
+          await window.enajApi.updateName(userName.trim());
+          onNext();
+        } catch (error) {
+          console.error('Failed to create guest account:', error);
+          // Continue anyway in demo mode
+          onNext();
+        } finally {
+          setLoading(false);
+        }
+      };
+      
       return (
         <div style={{ padding: "60px 28px 40px", display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh", justifyContent: "center" }}>
           <div style={{ animation: "float 3s ease-in-out infinite" }}><EnajLogo size={100} /></div>
@@ -233,15 +567,44 @@
           <p style={{ color: "#7a8a8e", fontSize: 16, marginTop: 8, letterSpacing: "2px", textTransform: "uppercase" }}>Putting the power of shopping back in your hands.</p>
           <div style={{ marginTop: 48, width: "100%", maxWidth: 340 }}>
             <p style={{ color: "#556", fontSize: 14, fontWeight: 500, marginBottom: 10 }}>What should we call you?</p>
-            <input type="text" value={userName} onChange={e => setUserName(e.target.value)} placeholder="Your first name" style={{ width: "100%", padding: "16px 20px", borderRadius: 16, border: "2px solid #e4e4e4", fontSize: 16, fontFamily: "'Libre Franklin', sans-serif", outline: "none", transition: "border-color 0.3s", background: "white" }} onFocus={e => e.target.style.borderColor = TIFFANY} onBlur={e => e.target.style.borderColor = "#e4e4e4"} />
+            <input type="text" value={userName} onChange={e => setUserName(e.target.value)} placeholder="Your first name" style={{ width: "100%", padding: "16px 20px", borderRadius: 16, border: "2px solid #e4e4e4", fontSize: 16, fontFamily: "'Libre Franklin', sans-serif", outline: "none", transition: "border-color 0.3s", background: "white" }} onFocus={e => e.target.style.borderColor = TIFFANY} onBlur={e => e.target.style.borderColor = "#e4e4e4"} disabled={loading} />
           </div>
-          <div style={{ marginTop: 36, width: "100%", maxWidth: 340 }}><button className="btn-primary" onClick={onNext}>Get Started →</button></div>
+          <div style={{ marginTop: 36, width: "100%", maxWidth: 340 }}>
+            <button className="btn-primary" onClick={handleGetStarted} disabled={loading}>
+              {loading ? 'Setting up...' : 'Get Started →'}
+            </button>
+          </div>
           <p style={{ marginTop: 24, color: "#aab", fontSize: 12, textAlign: "center", lineHeight: 1.6 }}>By continuing, you agree to our Terms of Service.<br />Your health data stays private and secure.</p>
         </div>
       );
     }
 
     function AilmentsScreen({ selected, onToggle, customAilment, setCustomAilment, expandedCategories, toggleCategory, onNext, onBack }) {
+      const [savingCustom, setSavingCustom] = useState(false);
+      
+      const handleSaveCustomAilment = async () => {
+        if (!customAilment.trim()) return;
+        
+        setSavingCustom(true);
+        try {
+          if (window.enajApi.token) {
+            await window.enajApi.addCustomAilment(customAilment.trim());
+          }
+          setCustomAilment('');
+        } catch (error) {
+          console.error('Failed to save custom ailment:', error);
+        } finally {
+          setSavingCustom(false);
+        }
+      };
+      
+      const handleNext = async () => {
+        // Save custom ailment if any
+        if (customAilment.trim()) {
+          await handleSaveCustomAilment();
+        }
+        onNext();
+      };
       return (
         <div style={{ padding: "20px 20px 120px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -253,7 +616,7 @@
             <p style={{ color: "#7a8a8e", fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>Select any conditions you have. Enaj will automatically flag ingredients known to aggravate them.</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {AILMENTS_DATA.map(cat => (
+            {AILMENTS_DATA && AILMENTS_DATA.length > 0 ? AILMENTS_DATA.map(cat => (
               <div key={cat.category}>
                 <div className="category-header" onClick={() => toggleCategory(cat.category)}>
                   <span style={{ fontWeight: 600, fontSize: 14, color: "#3a4a4e" }}>{cat.category}</span>
@@ -272,14 +635,16 @@
                   </div>
                 )}
               </div>
-            ))}
+            )) : <p style={{ color: "#aab", fontSize: 14, textAlign: "center", padding: 20 }}>Loading ailments data...</p>}
           </div>
           <div style={{ marginTop: 20, padding: "0 4px" }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: "#556", marginBottom: 8 }}>Have something else? Tell us:</p>
             <textarea value={customAilment} onChange={e => setCustomAilment(e.target.value)} placeholder="e.g., Histamine intolerance, Oral Allergy Syndrome..." rows={3} style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "2px solid #e8e8e8", fontSize: 14, fontFamily: "'Libre Franklin', sans-serif", outline: "none", resize: "vertical", transition: "border-color 0.3s" }} onFocus={e => e.target.style.borderColor = TIFFANY} onBlur={e => e.target.style.borderColor = "#e8e8e8"} />
           </div>
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 28px 28px", background: "linear-gradient(transparent, #f0faf9ee 30%)", maxWidth: 420, margin: "0 auto" }}>
-            <button className="btn-primary" onClick={onNext}>Continue — Set Preferences →</button>
+            <button className="btn-primary" onClick={handleNext} disabled={savingCustom}>
+              {savingCustom ? 'Saving...' : 'Continue — Set Preferences →'}
+            </button>
             {selected.length > 0 && <p style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: SEAMOSS_DARK, fontWeight: 500 }}>{selected.length} condition{selected.length !== 1 ? "s" : ""} selected</p>}
           </div>
         </div>
@@ -297,7 +662,7 @@
             <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: "#2a3a3e", fontWeight: 600 }}>Your Preferences</h2>
             <p style={{ color: "#7a8a8e", fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>Beyond your health conditions, select anything else you want to avoid in your products.</p>
           </div>
-          {PERSONAL_PREFERENCES.map(cat => (
+          {PERSONAL_PREFERENCES && PERSONAL_PREFERENCES.length > 0 ? PERSONAL_PREFERENCES.map(cat => (
             <div key={cat.category} style={{ marginBottom: 22 }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: SEAMOSS_DARK, marginBottom: 10, textTransform: "uppercase", letterSpacing: "1px" }}>{cat.category}</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -308,7 +673,7 @@
                 ))}
               </div>
             </div>
-          ))}
+          )) : <p style={{ color: "#aab", fontSize: 14, textAlign: "center", padding: 20 }}>Loading preferences data...</p>}
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 28px 28px", background: "linear-gradient(transparent, #f0faf9ee 30%)", maxWidth: 420, margin: "0 auto" }}>
             <button className="btn-primary" onClick={onNext}>Save & Continue →</button>
             {selected.length > 0 && <p style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: SEAMOSS_DARK, fontWeight: 500 }}>{selected.length} preference{selected.length !== 1 ? "s" : ""} selected</p>}
@@ -375,8 +740,8 @@
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {ailments.length > 0 ? ailments.map(a => {
-                const item = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === a);
-                return <span key={a} style={{ padding: "8px 14px", borderRadius: 20, background: `linear-gradient(135deg, ${TIFFANY}12, ${SEAMOSS}08)`, border: `1.5px solid ${TIFFANY}33`, fontSize: 13, fontWeight: 500, color: TIFFANY_DARK }}>{item?.icon} {a}</span>;
+                const item = AILMENTS_DATA && AILMENTS_DATA.length > 0 ? AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === a) : null;
+                return <span key={a} style={{ padding: "8px 14px", borderRadius: 20, background: `linear-gradient(135deg, ${TIFFANY}12, ${SEAMOSS}08)`, border: `1.5px solid ${TIFFANY}33`, fontSize: 13, fontWeight: 500, color: TIFFANY_DARK }}>{item?.icon || '🩺'} {a}</span>;
               }) : <p style={{ color: "#aab", fontSize: 13, fontStyle: "italic" }}>No conditions added yet</p>}
             </div>
           </div>
@@ -430,7 +795,7 @@
           </div>
 
           {ailments.length > 0 ? ailments.map(ailmentName => {
-            const item = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === ailmentName);
+            const item = AILMENTS_DATA && AILMENTS_DATA.length > 0 ? AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === ailmentName) : null;
             if (!item) return null;
             const active = getActive(ailmentName);
             const removed = getRemoved(ailmentName);
@@ -551,8 +916,13 @@
     }
 
     function ScanResultScreen({ product, alternatives, userAvoid, getReasons, onBack, onHome }) {
-      const matchedFlags = product.flagged.filter(f => userAvoid.some(a => f.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(f.toLowerCase())));
-      const displayFlags = matchedFlags.length > 0 ? matchedFlags : product.flagged;
+      // Use scan result from backend if available
+      const scanResult = window.lastScanResult;
+      const actualProduct = scanResult?.product || product;
+      const actualAlternatives = alternatives; // TODO: Get from backend
+      
+      const matchedFlags = actualProduct.flagged.filter(f => userAvoid.some(a => f.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(f.toLowerCase())));
+      const displayFlags = matchedFlags.length > 0 ? matchedFlags : actualProduct.flagged;
 
       return (
         <div style={{ padding: 0, minHeight: "100vh", background: "#f5f5f5" }}>
@@ -564,10 +934,10 @@
 
             <div style={{ padding: "16px 18px", borderBottom: "1px solid #f0f0f0" }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                <div style={{ width: 54, height: 54, borderRadius: 14, background: "#f8f8f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>{product.image}</div>
+                <div style={{ width: 54, height: 54, borderRadius: 14, background: "#f8f8f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>{actualProduct.image}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#2a3a3e", lineHeight: 1.3 }}>{product.name}</p>
-                  <p style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{product.brand} · {product.price}</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#2a3a3e", lineHeight: 1.3 }}>{actualProduct.name}</p>
+                  <p style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{actualProduct.brand} · {actualProduct.price}</p>
                 </div>
               </div>
             </div>
@@ -614,7 +984,7 @@
                 <span style={{ fontSize: 12, color: "#888" }}>— meet all your preferences</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {alternatives.map((alt, i) => (
+                {actualAlternatives.map((alt, i) => (
                   <a key={i} href={alt.link} className="product-card" style={{ animation: `fadeUp 0.35s ease ${i * 0.1}s both` }}>
                     <div style={{ width: 50, height: 50, borderRadius: 12, background: `linear-gradient(135deg, ${TIFFANY}12, ${SEAMOSS}08)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>{alt.image}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
