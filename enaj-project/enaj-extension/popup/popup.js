@@ -50,7 +50,7 @@ function getAvoidList() {
 
 function getIngredientReasons(flaggedIngredient) {
   const reasons = { ailments: [], preferences: [] };
-  const fL = flaggedIngredient.toLowerCase();
+  const flagTokens = getAvoidTokens(flaggedIngredient);
 
   for (const ailmentName of profile.ailments) {
     for (const cat of AILMENTS_DATA) {
@@ -58,37 +58,152 @@ function getIngredientReasons(flaggedIngredient) {
       if (item) {
         const removed = (profile.removedIngredients || {})[ailmentName] || [];
         const active = item.avoid.filter((a) => !removed.includes(a));
-        if (active.some((a) => a.toLowerCase().includes(fL) || fL.includes(a.toLowerCase()))) {
+        const matched = active.some((a) => {
+          const aTokens = getAvoidTokens(a);
+          return flagTokens.some((ft) =>
+            aTokens.some((at) => ft === at || isMatch(ft, at) || isMatch(at, ft))
+          );
+        });
+        if (matched) {
           reasons.ailments.push({ name: ailmentName, icon: item.icon });
         }
       }
     }
   }
 
-  const matchedPref = profile.preferences.find(
-    (p) => p.toLowerCase().includes(fL) || fL.includes(p.toLowerCase())
-  );
+  const matchedPref = profile.preferences.find((p) => {
+    const pTokens = getAvoidTokens(p);
+    return flagTokens.some((ft) =>
+      pTokens.some((pt) => ft === pt || isMatch(ft, pt) || isMatch(pt, ft))
+    );
+  });
   if (matchedPref) reasons.preferences.push(matchedPref);
 
   return reasons;
 }
 
+/**
+ * Normalize a string for fuzzy matching:
+ * - lowercase
+ * - strip parenthetical suffixes like "(SLS)" or "(heavy)"
+ * - strip trailing punctuation
+ * - collapse whitespace
+ */
+function normalize(str) {
+  return str
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "")       // remove parenthetical notes
+    .replace(/[\/\\]/g, " ")       // slashes → spaces ("Fragrance/Parfum" → "Fragrance Parfum")
+    .replace(/[^a-z0-9\s-]/g, "")  // strip special chars
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Generate all matching tokens from an avoid term.
+ * e.g. "Fragrance/Parfum" → ["fragrance parfum", "fragrance", "parfum"]
+ * e.g. "Sodium Lauryl Sulfate (SLS)" → ["sodium lauryl sulfate", "sls"]
+ * e.g. "AHA/BHA (high %)" → ["aha bha", "aha", "bha"]
+ */
+function getAvoidTokens(avoid) {
+  const tokens = new Set();
+  const full = normalize(avoid);
+  if (full) tokens.add(full);
+
+  // Add each slash-separated part individually
+  avoid.split("/").forEach((part) => {
+    const n = normalize(part);
+    if (n && n.length >= 3) tokens.add(n);
+  });
+
+  // Add parenthetical content as its own token (e.g. "SLS" from "(SLS)")
+  const parenMatch = avoid.match(/\(([^)]+)\)/g);
+  if (parenMatch) {
+    parenMatch.forEach((p) => {
+      const inner = normalize(p.replace(/[()]/g, ""));
+      if (inner && inner.length >= 2) tokens.add(inner);
+    });
+  }
+
+  return Array.from(tokens);
+}
+
+/**
+ * Check if two normalized strings are a meaningful ingredient match.
+ * Prevents tiny strings ("or", "di") from matching inside unrelated words.
+ */
+function isMatch(ingNorm, avoidToken) {
+  // Exact match — always valid
+  if (ingNorm === avoidToken) return true;
+
+  // Ingredient contains the full avoid token as a substring
+  // e.g. ingredient "sodium lauryl sulfate" contains avoid "lauryl sulfate"
+  if (ingNorm.includes(avoidToken) && avoidToken.length >= 4) return true;
+
+  // Avoid token contains the full ingredient as a substring
+  // ONLY if the ingredient is long enough to be meaningful (not "or", "di", etc.)
+  // AND the ingredient matches a whole word inside the avoid token
+  if (avoidToken.includes(ingNorm) && ingNorm.length >= 5) {
+    // Make sure it's a whole-word match inside the avoid token
+    const wordBoundary = new RegExp("\\b" + escapeRegex(ingNorm) + "\\b");
+    if (wordBoundary.test(avoidToken)) return true;
+  }
+
+  // For short tokens (abbreviations like "sls", "bht", "bha", "msg")
+  // only match if the ingredient contains it as an exact whole word
+  if (avoidToken.length >= 2 && avoidToken.length <= 5) {
+    const ingWords = ingNorm.split(/[\s-]+/);
+    if (ingWords.some((w) => w === avoidToken)) return true;
+  }
+
+  return false;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function analyzeIngredients(ingredientsStr) {
   const avoidList = getAvoidList();
+
+  // Parse ingredients — split on commas and semicolons only.
+  // Do NOT split on "and" / "or" — these are used within ingredient names
+  // (e.g. "Shea Butter Or Cera Alba/Beeswax Or Copernicia Cerifera Wax")
   const ingredientsList = ingredientsStr
-    .split(",")
-    .map((i) => i.trim().toLowerCase())
-    .filter(Boolean);
+    .split(/[,;]+/)
+    .map((i) => i.trim())
+    .filter((i) => i.length > 2); // skip tiny fragments
+
+  // Pre-compute normalized avoid tokens
+  const avoidEntries = avoidList.map((avoid) => ({
+    original: avoid,
+    tokens: getAvoidTokens(avoid),
+  }));
 
   const flagged = [];
-  for (const ing of ingredientsList) {
-    for (const avoid of avoidList) {
-      const avoidL = avoid.toLowerCase();
-      if (ing.includes(avoidL) || avoidL.includes(ing)) {
+  const alreadyFlagged = new Set();
+
+  for (const rawIng of ingredientsList) {
+    const ingNorm = normalize(rawIng);
+    if (!ingNorm || ingNorm.length < 3) continue; // skip junk like "or", "di"
+
+    for (const entry of avoidEntries) {
+      if (alreadyFlagged.has(entry.original)) continue;
+
+      let matched = false;
+      for (const token of entry.tokens) {
+        if (isMatch(ingNorm, token)) {
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) {
+        alreadyFlagged.add(entry.original);
         flagged.push({
-          ingredient: ing,
-          matchedAvoid: avoid,
-          reasons: getIngredientReasons(avoid),
+          ingredient: rawIng.trim(),
+          matchedAvoid: entry.original,
+          reasons: getIngredientReasons(entry.original),
         });
         break;
       }

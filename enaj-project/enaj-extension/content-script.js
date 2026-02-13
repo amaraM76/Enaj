@@ -229,12 +229,13 @@
           product.ingredients = product.ingredients
             .replace(/\n+/g, ", ")
             .replace(/\s{2,}/g, " ")
-            .replace(/ingredients?[:\s]*/i, "")
+            .replace(/^ingredients?\s*[:\-–—]\s*/i, "")  // only strip "Ingredients:" at the very start
+            .replace(/,\s*,/g, ",")  // collapse double commas
             .trim();
 
           // Trim if absurdly long (probably grabbed too much DOM text)
-          if (product.ingredients.length > 2000) {
-            product.ingredients = product.ingredients.substring(0, 2000);
+          if (product.ingredients.length > 3000) {
+            product.ingredients = product.ingredients.substring(0, 3000);
           }
         }
 
