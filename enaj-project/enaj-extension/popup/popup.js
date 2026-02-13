@@ -554,54 +554,30 @@ function renderResult() {
       </div>
 
       <div class="card" style="margin-top:0;">
-        <h2 style="font-size:14px;margin-bottom:12px;color:#d32f2f;">⚠️ Flagged Ingredients</h2>`;
+        <h2 style="font-size:14px;margin-bottom:8px;">Flagged Ingredients</h2>`;
 
     for (const f of flagged) {
       const reasons = f.reasons;
-
-      // Build reason badges
-      let reasonBadges = [];
-
-      if (reasons.ailments && reasons.ailments.length > 0) {
-        for (const a of reasons.ailments) {
-          reasonBadges.push(`<span style="display:inline-block;background:#e3f2fd;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;margin:2px;">${a.icon} ${esc(a.name)}</span>`);
-        }
+      let reasonText = "";
+      if (reasons.ailments.length > 0) {
+        reasonText += reasons.ailments.map((a) => a.icon + " " + a.name).join(", ");
       }
-
-      if (reasons.preferences && reasons.preferences.length > 0) {
-        for (const p of reasons.preferences) {
-          reasonBadges.push(`<span style="display:inline-block;background:#fff3cd;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;margin:2px;">🚫 ${esc(p)}</span>`);
-        }
+      if (reasons.preferences.length > 0) {
+        if (reasonText) reasonText += " · ";
+        reasonText += "🚫 " + reasons.preferences.join(", ");
       }
 
       html += `
-        <div class="flagged-item" style="background:#fff9e6;border-left:4px solid #ff6b6b;padding:12px;margin:8px 0;border-radius:6px;">
-          <div style="margin-bottom:6px;">
-            <div class="flagged-name" style="font-size:15px;font-weight:700;color:#d32f2f;margin-bottom:4px;">
-              ${esc(capitalize(f.ingredient))}
-            </div>
-            ${f.matchedAvoid && f.matchedAvoid !== f.ingredient ?
-              `<div style="font-size:12px;color:#666;font-style:italic;margin-bottom:6px;">
-                Matches avoid list: "${esc(f.matchedAvoid)}"
-              </div>` : ''}
+        <div class="flagged-item">
+          <div class="flagged-dot"></div>
+          <div>
+            <div class="flagged-name">${esc(capitalize(f.ingredient))}</div>
+            ${reasonText ? `<div class="flagged-reason">${reasonText}</div>` : ""}
           </div>
-          ${reasonBadges.length > 0 ?
-            `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
-              <span style="font-size:12px;color:#555;font-weight:600;margin-right:4px;">Why flagged:</span>
-              ${reasonBadges.join('')}
-            </div>` : ''}
         </div>`;
     }
 
-    html += `
-      </div>
-
-      <div style="background:#e8f5e9;padding:12px;border-radius:6px;margin-top:12px;border-left:3px solid #4caf50;">
-        <p style="margin:0;font-size:12px;color:#2e7d32;line-height:1.5;">
-          <strong>💡 Tip:</strong> These ingredients match items you want to avoid based on your profile. You can adjust your preferences in settings.
-        </p>
-      </div>
-    `;
+    html += `</div>`;
   }
 
   html += `

@@ -1,37 +1,7 @@
-// Enaj Content Script - Improved Ingredient Extraction
+// Enaj Content Script
 // Injected into supported shopping sites to scrape product data
 
 (() => {
-  // Improved ingredient extraction function
-  function extractIngredientsFromText(text) {
-    // Look for "Ingredients:" label followed by the actual ingredients
-    const patterns = [
-      /ingredients?:\s*([^.]+(?:\.[^.]*)*)/i,  // Match "Ingredients: ... "
-      /ingredients?[:\s]+(.+?)(?=\n\n|\n[A-Z]|$)/is,  // Multi-line ingredients
-      /ingredients?[:\s]*(.+)/i  // Simple fallback
-    ];
-
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1] && match[1].trim().length > 20) {
-        let ingredientText = match[1].trim();
-
-        // Clean up the text
-        ingredientText = ingredientText
-          .replace(/^ingredients?:?\s*/i, '')  // Remove "Ingredients:" prefix
-          .replace(/\s+/g, ' ')  // Normalize whitespace
-          .replace(/\n+/g, ', ')  // Replace newlines with commas
-          .trim();
-
-        // Only return if it looks like ingredients (contains commas or multiple words)
-        if (ingredientText.includes(',') || ingredientText.split(' ').length > 5) {
-          return ingredientText;
-        }
-      }
-    }
-    return '';
-  }
-
   // Site-specific scrapers
   const scrapers = {
     "amazon.com": () => {
@@ -46,42 +16,47 @@
         document.querySelector("#priceblock_dealprice")?.innerText?.trim() ||
         "";
 
+      // Ingredients can be in multiple places on Amazon
       let ingredients = "";
 
-      // Priority 1: Important Information section (most reliable)
-      const importantSections = document.querySelectorAll("#important-information .content, #important-information");
-      for (const section of importantSections) {
-        const text = section.innerText || section.textContent;
-        if (/ingredients?/i.test(text)) {
-          ingredients = extractIngredientsFromText(text);
-          if (ingredients) break;
+      // 1. "Important Information" section
+      const importantSections = document.querySelectorAll("#important-information .content");
+      importantSections.forEach((section) => {
+        const text = section.innerText;
+        if (/ingredient/i.test(text)) {
+          // Try to grab just the ingredient line
+          const lines = text.split("\n").filter((l) => l.trim());
+          const idx = lines.findIndex((l) => /ingredient/i.test(l));
+          if (idx !== -1 && lines[idx + 1]) {
+            ingredients = lines.slice(idx + 1).join(", ");
+          } else {
+            ingredients = text;
+          }
         }
+      });
+
+      // 2. Product description / bullet points
+      if (!ingredients) {
+        const featureBullets = document.querySelectorAll("#feature-bullets li span");
+        featureBullets.forEach((b) => {
+          if (/ingredient/i.test(b.innerText)) {
+            ingredients = b.innerText;
+          }
+        });
       }
 
-      // Priority 2: Product description sections
+      // 3. "Product Details" / "From the Manufacturer"
       if (!ingredients) {
-        const descSections = document.querySelectorAll(
-          "#productDescription, #feature-bullets, #aplus, .aplus-v2, #detail-bullets, .product-description"
+        const detailSections = document.querySelectorAll(
+          "#productDescription, #aplus, .aplus-v2, #detail-bullets"
         );
-        for (const section of descSections) {
-          const text = section.innerText || section.textContent;
-          if (/ingredients?/i.test(text)) {
-            ingredients = extractIngredientsFromText(text);
-            if (ingredients) break;
+        detailSections.forEach((section) => {
+          const text = section.innerText;
+          if (/ingredient/i.test(text)) {
+            const match = text.match(/ingredients?[:\s]*([^\n]+(?:\n[^\n]+)*)/i);
+            if (match) ingredients = match[1].trim();
           }
-        }
-      }
-
-      // Priority 3: Look in all text content
-      if (!ingredients) {
-        const allDivs = document.querySelectorAll("div, section, td, li");
-        for (const div of allDivs) {
-          const text = div.innerText || div.textContent;
-          if (text && /^ingredients?:/i.test(text.trim()) && text.length < 2000) {
-            ingredients = extractIngredientsFromText(text);
-            if (ingredients) break;
-          }
-        }
+        });
       }
 
       return { name, brand, price, ingredients, url: window.location.href };
@@ -102,30 +77,29 @@
         "";
 
       let ingredients = "";
-
-      // Sephora often has a dedicated Ingredients section
-      const ingredientSections = document.querySelectorAll(
-        '[data-at="ingredients"], .css-1ue8dmw, [class*="Ingredients"], [class*="ingredients"]'
+      // Sephora has an "Ingredients" tab/section
+      const allSections = document.querySelectorAll(
+        '[data-at="ingredients"], .css-1ue8dmw, [class*="Ingredients"]'
       );
-
-      for (const section of ingredientSections) {
-        const text = section.innerText || section.textContent;
-        if (text && text.length > 20) {
-          ingredients = extractIngredientsFromText(text);
-          if (ingredients) break;
+      allSections.forEach((el) => {
+        if (el.innerText.length > ingredients.length) {
+          ingredients = el.innerText.replace(/^ingredients?[:\s]*/i, "").trim();
         }
-      }
+      });
 
-      // Fallback: search all content
+      // Fallback: search all text blocks
       if (!ingredients) {
-        const allElements = document.querySelectorAll("div, p, section");
-        for (const el of allElements) {
-          const text = el.innerText || el.textContent;
-          if (text && /^ingredients?:/i.test(text.trim())) {
-            ingredients = extractIngredientsFromText(text);
-            if (ingredients) break;
+        document.querySelectorAll("div, p, span").forEach((el) => {
+          const text = el.innerText;
+          if (
+            /^ingredients?:/i.test(text.trim()) ||
+            (/ingredient/i.test(text) && text.includes(",") && text.length > 50)
+          ) {
+            if (text.length > ingredients.length) {
+              ingredients = text.replace(/^ingredients?[:\s]*/i, "").trim();
+            }
           }
-        }
+        });
       }
 
       return { name, brand, price, ingredients, url: window.location.href };
@@ -142,33 +116,91 @@
         document.querySelector('[data-test="product-price"]')?.innerText?.trim() || "";
 
       let ingredients = "";
-      const allElements = document.querySelectorAll("div, p, section, td");
-      for (const el of allElements) {
-        const text = el.innerText || el.textContent;
-        if (text && /ingredients?:/i.test(text)) {
-          ingredients = extractIngredientsFromText(text);
-          if (ingredients) break;
+      // Target often has ingredients in the "Details" tab
+      document.querySelectorAll("div, p, span").forEach((el) => {
+        const text = el.innerText;
+        if (/ingredients?[:\s]/i.test(text) && text.includes(",") && text.length > 40) {
+          const match = text.match(/ingredients?[:\s]*(.+)/is);
+          if (match && match[1].length > ingredients.length) {
+            ingredients = match[1].trim();
+          }
         }
-      }
+      });
 
       return { name, brand, price, ingredients, url: window.location.href };
     },
 
-    // Generic fallback scraper
+    "ulta.com": () => {
+      const name =
+        document.querySelector(".ProductMainSection__productName")?.innerText?.trim() ||
+        document.querySelector("h1")?.innerText?.trim() ||
+        "";
+      const brand =
+        document.querySelector(".ProductMainSection__brandName a")?.innerText?.trim() ||
+        document.querySelector('[class*="brand"] a')?.innerText?.trim() ||
+        "";
+      const price =
+        document.querySelector(".ProductPricingPanel span")?.innerText?.trim() || "";
+
+      let ingredients = "";
+      document.querySelectorAll("div, p, span, li").forEach((el) => {
+        const text = el.innerText;
+        if (/ingredients?[:\s]/i.test(text) && text.includes(",") && text.length > 40) {
+          const match = text.match(/ingredients?[:\s]*(.+)/is);
+          if (match && match[1].length > ingredients.length) {
+            ingredients = match[1].trim();
+          }
+        }
+      });
+
+      return { name, brand, price, ingredients, url: window.location.href };
+    },
+
+    "walmart.com": () => {
+      const name = document.querySelector('[itemprop="name"]')?.innerText?.trim() ||
+        document.querySelector("h1")?.innerText?.trim() || "";
+      const brand = document.querySelector('[itemprop="brand"]')?.innerText?.trim() ||
+        document.querySelector('[data-testid="product-brand"] a')?.innerText?.trim() || "";
+      const price = document.querySelector('[itemprop="price"]')?.innerText?.trim() ||
+        document.querySelector('[data-testid="price-wrap"]')?.innerText?.trim() || "";
+
+      let ingredients = "";
+      document.querySelectorAll("div, p, span, td").forEach((el) => {
+        const text = el.innerText;
+        if (/ingredients?[:\s]/i.test(text) && text.includes(",") && text.length > 40) {
+          const match = text.match(/ingredients?[:\s]*(.+)/is);
+          if (match && match[1].length > ingredients.length) {
+            ingredients = match[1].trim();
+          }
+        }
+      });
+
+      return { name, brand, price, ingredients, url: window.location.href };
+    },
+
+    // Generic fallback scraper for unsupported sites
     _generic: () => {
       const name = document.querySelector("h1")?.innerText?.trim() || document.title || "";
       const brand = "";
       const price = "";
 
       let ingredients = "";
+      // Look for any element containing "ingredients" followed by a comma-separated list
       const allElements = document.querySelectorAll("div, p, span, td, li, section");
-      for (const el of allElements) {
-        const text = el.innerText || el.textContent;
-        if (text && /^ingredients?:/i.test(text.trim()) && text.length < 3000) {
-          ingredients = extractIngredientsFromText(text);
-          if (ingredients) break;
+      allElements.forEach((el) => {
+        const text = el.innerText;
+        if (
+          /ingredients?[:\s]/i.test(text) &&
+          text.includes(",") &&
+          text.length > 30 &&
+          text.length < 3000
+        ) {
+          const match = text.match(/ingredients?[:\s]*(.+)/is);
+          if (match && match[1].length > ingredients.length) {
+            ingredients = match[1].trim();
+          }
         }
-      }
+      });
 
       return { name, brand, price, ingredients, url: window.location.href };
     },
@@ -195,26 +227,21 @@
         // Clean up ingredients string
         if (product.ingredients) {
           product.ingredients = product.ingredients
-            .replace(/^ingredients?:?\s*/i, '')  // Remove "Ingredients:" prefix
-            .replace(/\n+/g, ', ')  // Replace newlines with commas
-            .replace(/\s{2,}/g, ' ')  // Normalize spaces
+            .replace(/\n+/g, ", ")
+            .replace(/\s{2,}/g, " ")
+            .replace(/ingredients?[:\s]*/i, "")
             .trim();
 
-          // Trim if absurdly long
+          // Trim if absurdly long (probably grabbed too much DOM text)
           if (product.ingredients.length > 2000) {
             product.ingredients = product.ingredients.substring(0, 2000);
           }
         }
 
-        console.log('[Enaj] Scraped ingredients:', product.ingredients);
         sendResponse({ product });
       } catch (err) {
-        console.error('[Enaj] Scraping error:', err);
         sendResponse({ error: "Failed to read page: " + err.message });
       }
     }
-    return true;  // Keep message channel open for async response
   });
-
-  console.log('[Enaj] Content script loaded on', window.location.hostname);
 })();
