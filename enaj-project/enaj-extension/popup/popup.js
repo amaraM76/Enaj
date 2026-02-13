@@ -572,6 +572,7 @@ function renderResult() {
           <div class="flagged-dot"></div>
           <div>
             <div class="flagged-name">${esc(capitalize(f.ingredient))}</div>
+            ${f.matchedAvoid ? `<div class="flagged-reason" style="font-style:italic;color:#666;font-size:12px;">Matches: "${esc(f.matchedAvoid)}"</div>` : ""}
             ${reasonText ? `<div class="flagged-reason">${reasonText}</div>` : ""}
           </div>
         </div>`;
