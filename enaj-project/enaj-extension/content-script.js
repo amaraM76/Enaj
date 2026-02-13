@@ -73,33 +73,80 @@
         "";
       const price =
         document.querySelector('[data-at="price"]')?.innerText?.trim() ||
-        document.querySelector(".css-0")?.innerText?.trim() ||
         "";
 
       let ingredients = "";
-      // Sephora has an "Ingredients" tab/section
-      const allSections = document.querySelectorAll(
-        '[data-at="ingredients"], .css-1ue8dmw, [class*="Ingredients"]'
-      );
-      allSections.forEach((el) => {
-        if (el.innerText.length > ingredients.length) {
-          ingredients = el.innerText.replace(/^ingredients?[:\s]*/i, "").trim();
-        }
-      });
 
-      // Fallback: search all text blocks
+      // 1. Target the #ingredients div directly (Sephora's primary pattern)
+      const ingredientsDiv = document.getElementById("ingredients");
+      if (ingredientsDiv) {
+        // Get the text content, skip the heading element itself
+        const heading = document.getElementById("ingredients_heading");
+        let text = ingredientsDiv.innerText || "";
+        if (heading) {
+          text = text.replace(heading.innerText, "").trim();
+        }
+        // Clean the "Ingredients:" label if present
+        text = text.replace(/^ingredients?\s*[:\-–—]?\s*/i, "").trim();
+        if (text.length > 10 && text.includes(",")) {
+          ingredients = text;
+        }
+      }
+
+      // 2. Look for any element with id or class containing "ingredient"
       if (!ingredients) {
-        document.querySelectorAll("div, p, span").forEach((el) => {
-          const text = el.innerText;
-          if (
-            /^ingredients?:/i.test(text.trim()) ||
-            (/ingredient/i.test(text) && text.includes(",") && text.length > 50)
-          ) {
-            if (text.length > ingredients.length) {
-              ingredients = text.replace(/^ingredients?[:\s]*/i, "").trim();
+        const candidates = document.querySelectorAll(
+          '[id*="ingredient" i], [class*="ingredient" i], [data-at="ingredients"], [data-comp*="Ingredient"]'
+        );
+        for (const el of candidates) {
+          const text = (el.innerText || "").replace(/^ingredients?\s*[:\-–—]?\s*/i, "").trim();
+          if (text.includes(",") && text.length > ingredients.length) {
+            ingredients = text;
+          }
+        }
+      }
+
+      // 3. Look in tabbed content sections (Sephora uses tabs for Details/Ingredients/How to Use)
+      if (!ingredients) {
+        const tabPanels = document.querySelectorAll(
+          '[role="tabpanel"], [class*="TabPanel"], [class*="tabpanel"], [class*="Accordion"]'
+        );
+        for (const panel of tabPanels) {
+          const text = panel.innerText || "";
+          if (/ingredients?\s*[:\-–—]?\s*/i.test(text) && text.includes(",")) {
+            const cleaned = text.replace(/^[\s\S]*?ingredients?\s*[:\-–—]?\s*/i, "").trim();
+            // Cut off at the next section
+            const cutoff = cleaned.search(
+              /\n\s*(how to use|directions|about the brand|what it is|what else you need|clean at sephora)\s*[:\-–—]?\s*/i
+            );
+            const final = cutoff > 0 ? cleaned.substring(0, cutoff).trim() : cleaned;
+            if (final.includes(",") && final.length > ingredients.length) {
+              ingredients = final;
             }
           }
-        });
+        }
+      }
+
+      // 4. Broadest fallback — scan all text blocks for "Ingredients:" followed by a comma list
+      if (!ingredients) {
+        const allEls = document.querySelectorAll("div, p, span, section");
+        for (const el of allEls) {
+          if (el.children.length > 15) continue; // skip large containers
+          const text = el.innerText || "";
+          if (text.length < 30 || text.length > 5000) continue;
+          if (/ingredients?\s*[:\-–—]\s*/i.test(text) && text.includes(",")) {
+            const match = text.match(/ingredients?\s*[:\-–—]\s*([\s\S]+)/i);
+            if (match && match[1].includes(",") && match[1].length > ingredients.length) {
+              // Cut off at next section heading
+              let result = match[1].trim();
+              const cutoff = result.search(
+                /\n\s*(how to use|directions|warnings?|about|clean at|what it is)\s*[:\-–—]?\s*/i
+              );
+              if (cutoff > 0) result = result.substring(0, cutoff).trim();
+              if (result.length > ingredients.length) ingredients = result;
+            }
+          }
+        }
       }
 
       return { name, brand, price, ingredients, url: window.location.href };
@@ -185,22 +232,37 @@
       const price = "";
 
       let ingredients = "";
-      // Look for any element containing "ingredients" followed by a comma-separated list
-      const allElements = document.querySelectorAll("div, p, span, td, li, section");
-      allElements.forEach((el) => {
-        const text = el.innerText;
-        if (
-          /ingredients?[:\s]/i.test(text) &&
-          text.includes(",") &&
-          text.length > 30 &&
-          text.length < 3000
-        ) {
-          const match = text.match(/ingredients?[:\s]*(.+)/is);
-          if (match && match[1].length > ingredients.length) {
-            ingredients = match[1].trim();
-          }
+
+      // First check for common ingredient container IDs/classes
+      const directTargets = document.querySelectorAll(
+        '#ingredients, #Ingredients, [id*="ingredient" i], [class*="ingredient" i], [data-at="ingredients"]'
+      );
+      for (const el of directTargets) {
+        const text = (el.innerText || "").replace(/^ingredients?\s*[:\-–—]?\s*/i, "").trim();
+        if (text.includes(",") && text.length > ingredients.length) {
+          ingredients = text;
         }
-      });
+      }
+
+      // Fallback: look for any element containing "ingredients" followed by a comma-separated list
+      if (!ingredients) {
+        const allElements = document.querySelectorAll("div, p, span, td, li, section");
+        allElements.forEach((el) => {
+          if (el.children.length > 15) return;
+          const text = el.innerText;
+          if (
+            /ingredients?[:\s]/i.test(text) &&
+            text.includes(",") &&
+            text.length > 30 &&
+            text.length < 3000
+          ) {
+            const match = text.match(/ingredients?[:\s]*(.+)/is);
+            if (match && match[1].length > ingredients.length) {
+              ingredients = match[1].trim();
+            }
+          }
+        });
+      }
 
       return { name, brand, price, ingredients, url: window.location.href };
     },
@@ -229,13 +291,12 @@
           product.ingredients = product.ingredients
             .replace(/\n+/g, ", ")
             .replace(/\s{2,}/g, " ")
-            .replace(/^ingredients?\s*[:\-–—]\s*/i, "")  // only strip "Ingredients:" at the very start
-            .replace(/,\s*,/g, ",")  // collapse double commas
+            .replace(/ingredients?[:\s]*/i, "")
             .trim();
 
           // Trim if absurdly long (probably grabbed too much DOM text)
-          if (product.ingredients.length > 3000) {
-            product.ingredients = product.ingredients.substring(0, 3000);
+          if (product.ingredients.length > 2000) {
+            product.ingredients = product.ingredients.substring(0, 2000);
           }
         }
 
