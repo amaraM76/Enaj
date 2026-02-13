@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Product - Moisturizing Cream</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .product {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .brand { color: #666; font-size: 18px; margin-bottom: 20px; }
+        .price { font-size: 24px; color: #B12704; font-weight: 700; margin: 20px 0; }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+        .section h2 {
+            color: #111;
+            font-size: 20px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0c14b;
+            padding-bottom: 8px;
+        }
+        .ingredients {
+            line-height: 1.8;
+            color: #333;
+        }
+        .notice {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .notice h3 {
+            color: #155724;
+            margin: 0 0 10px 0;
+        }
+        .notice p {
+            margin: 5px 0;
+            color: #155724;
+        }
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="product">
+        <h1>Hydrating Daily Moisturizing Cream for Sensitive Skin</h1>
+        <div class="brand">Brand: DermaCare Professional</div>
+        <div class="price">$24.99</div>
+
+        <div class="notice">
+            <h3>🧪 Test Page for Enaj Extension</h3>
+            <p>This page contains ingredients that should trigger warnings if you have Eczema or Acne-Prone Skin in your profile.</p>
+            <p><strong>Expected flags:</strong> Parabens, Sodium Lauryl Sulfate, Fragrance, Coconut Oil, Alcohol Denat</p>
+        </div>
+
+        <div class="instructions">
+            <strong>📋 How to Test:</strong>
+            <ul>
+                <li>1. Make sure your Enaj extension is installed and linked</li>
+                <li>2. Set your profile to include "Eczema" and/or "Acne-Prone Skin"</li>
+                <li>3. Click the Enaj extension icon in your toolbar</li>
+                <li>4. Click "🔍 Scan This Product"</li>
+                <li>5. The extension will extract ingredients below and check them</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Product Description</h2>
+            <p>Our Hydrating Daily Moisturizing Cream is formulated to provide long-lasting hydration for sensitive skin. This rich, creamy formula absorbs quickly without leaving a greasy residue.</p>
+            <p><strong>Key Benefits:</strong></p>
+            <ul>
+                <li>24-hour hydration</li>
+                <li>Suitable for sensitive skin</li>
+                <li>Non-greasy formula</li>
+                <li>Dermatologist tested</li>
+            </ul>
+        </div>
+
+        <div id="important-information" class="section">
+            <h2>Important Information</h2>
+            <div class="content">
+                <p><strong>Ingredients:</strong> Water (Aqua), Glycerin, Cetearyl Alcohol, Caprylic/Capric Triglyceride, Coconut Oil, Methylparaben, Propylparaben, Sodium Lauryl Sulfate (SLS), Carbomer, Dimethicone, Alcohol Denat, Fragrance (Parfum), Isopropyl Myristate, Tocopheryl Acetate (Vitamin E), Allantoin, Panthenol, Phenoxyethanol, Ethylhexylglycerin, Disodium EDTA, Citric Acid, Sodium Hydroxide</p>
+
+                <p><strong>Directions:</strong> Apply liberally to clean, dry skin. Use daily for best results.</p>
+
+                <p><strong>Warnings:</strong> For external use only. Avoid contact with eyes. Discontinue use if irritation occurs.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>What Should the Extension Show?</h2>
+            <p><strong>If you have Eczema selected:</strong></p>
+            <ul>
+                <li><strong>Methylparaben & Propylparaben</strong> → Matches "Parabens" (flagged for Eczema)</li>
+                <li><strong>Sodium Lauryl Sulfate</strong> → Matches "Sodium Lauryl Sulfate (SLS)" (flagged for Eczema)</li>
+                <li><strong>Fragrance</strong> → Matches "Fragrance/Parfum" (flagged for Eczema)</li>
+                <li><strong>Alcohol Denat</strong> → Matches "Alcohol Denat" (flagged for Eczema)</li>
+            </ul>
+
+            <p><strong>If you have Acne-Prone Skin selected:</strong></p>
+            <ul>
+                <li><strong>Coconut Oil</strong> → Matches "Coconut Oil" (flagged for Acne-Prone Skin)</li>
+                <li><strong>Isopropyl Myristate</strong> → Matches "Isopropyl Myristate" (flagged for Acne-Prone Skin)</li>
+                <li><strong>Sodium Lauryl Sulfate</strong> → Matches "Sodium Lauryl Sulfate (SLS)" (flagged for Acne-Prone Skin)</li>
+            </ul>
+
+            <p><strong>Expected Result:</strong> The extension should show a warning banner with 5-7 flagged ingredients (depending on your profile), each clearly named with the reason why it's flagged.</p>
+        </div>
+
+        <div class="notice">
+            <h3>✅ What You Should See in the Extension</h3>
+            <p><strong>⚠️ 5 Ingredients Flagged</strong></p>
+            <p>Based on your health conditions & preferences</p>
+            <br>
+            <p><strong>Flagged Ingredients:</strong></p>
+            <ul style="margin-left: 25px;">
+                <li><strong style="color: #d32f2f;">Methylparaben</strong><br>
+                    <em>Matches avoid list: "Parabens"</em><br>
+                    <span style="background:#e3f2fd;padding:2px 8px;border-radius:10px;font-size:11px;">🧴 Eczema</span>
+                </li>
+                <li><strong style="color: #d32f2f;">Sodium Lauryl Sulfate</strong><br>
+                    <em>Matches avoid list: "Sodium Lauryl Sulfate (SLS)"</em><br>
+                    <span style="background:#e3f2fd;padding:2px 8px;border-radius:10px;font-size:11px;">🧴 Eczema</span>
+                    <span style="background:#e3f2fd;padding:2px 8px;border-radius:10px;font-size:11px;">✨ Acne-Prone Skin</span>
+                </li>
+                <li>... and more</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Log when page loads
+        console.log('[Enaj Demo] Product page loaded');
+        console.log('[Enaj Demo] Ingredients available for scraping');
+    </script>
+</body>
+</html>

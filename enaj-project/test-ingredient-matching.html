@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enaj - Test Ingredient Matching</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2c5f5f; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #2c5f5f;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #2c5f5f;
+        }
+        .profile-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .flagged {
+            background: #fff3cd;
+            border-left: 4px solid #ff6b6b;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .flagged-name {
+            font-weight: 700;
+            color: #d32f2f;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .flagged-match {
+            color: #666;
+            font-size: 13px;
+            font-style: italic;
+            margin-bottom: 8px;
+        }
+        .flagged-reason {
+            color: #555;
+            font-size: 14px;
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        .reason-badge {
+            background: #e3f2fd;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .safe {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #155724;
+            font-weight: 600;
+        }
+        button {
+            background: #2c5f5f;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        button:hover { background: #1f4545; }
+        .ingredients-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: monospace;
+            margin: 10px 0;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Enaj Ingredient Matcher Test</h1>
+        <p class="subtitle">Test how the extension matches ingredients against your profile</p>
+
+        <div class="section">
+            <h3>Your Profile</h3>
+            <div id="profile"></div>
+        </div>
+
+        <div class="section">
+            <h3>Test Product Ingredients</h3>
+            <p style="font-size: 13px; color: #666;">Enter ingredients separated by commas (like on a product label):</p>
+            <textarea id="ingredients" class="ingredients-input" placeholder="Water, Parabens, Glycerin, Sodium Lauryl Sulfate, Fragrance, Coconut Oil...">Water, Methylparaben, Propylparaben, Glycerin, Sodium Lauryl Sulfate, Fragrance, Coconut Oil, Alcohol Denat, Isopropyl Myristate</textarea>
+            <button onclick="analyzeIngredients()">🔍 Analyze Ingredients</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Ailments data (subset for testing)
+        const AILMENTS_DATA = [
+            {
+                category: "Skin Conditions",
+                items: [
+                    { name: "Eczema", icon: "🧴", avoid: ["Fragrance/Parfum", "Sodium Lauryl Sulfate (SLS)", "Alcohol Denat", "Parabens", "Formaldehyde", "Lanolin", "Propylene Glycol", "Cocamidopropyl Betaine", "Essential Oils"] },
+                    { name: "Acne-Prone Skin", icon: "✨", avoid: ["Coconut Oil", "Isopropyl Myristate", "Algae Extract", "Lanolin", "Cocoa Butter", "Sodium Lauryl Sulfate (SLS)", "Mineral Oil", "Silicones (heavy)"] },
+                ]
+            }
+        ];
+
+        // Demo profile: User has Eczema and Acne
+        const profile = {
+            ailments: ["Eczema", "Acne-Prone Skin"],
+            preferences: ["Sulfates (SLS/SLES)", "Artificial Fragrances/Parfum"]
+        };
+
+        // Display profile
+        document.getElementById('profile').innerHTML = `
+            <strong>Ailments:</strong>
+            ${profile.ailments.map(a => {
+                const ailment = AILMENTS_DATA.flatMap(c => c.items).find(i => i.name === a);
+                return `<div class="profile-item">${ailment.icon} ${a}</div>`;
+            }).join('')}
+            <strong style="margin-top: 15px; display: block;">Preferences:</strong>
+            ${profile.preferences.map(p => `<div class="profile-item">🚫 ${p}</div>`).join('')}
+        `;
+
+        function getAvoidList() {
+            const avoidSet = new Set();
+
+            // Add ingredients from ailments
+            for (const ailmentName of profile.ailments) {
+                for (const cat of AILMENTS_DATA) {
+                    const item = cat.items.find(i => i.name === ailmentName);
+                    if (item) {
+                        for (const ing of item.avoid) {
+                            avoidSet.add(ing);
+                        }
+                    }
+                }
+            }
+
+            // Add preferences
+            for (const pref of profile.preferences) {
+                avoidSet.add(pref);
+            }
+
+            return Array.from(avoidSet);
+        }
+
+        function getIngredientReasons(matchedAvoid) {
+            const reasons = { ailments: [], preferences: [] };
+            const matchL = matchedAvoid.toLowerCase();
+
+            // Check which ailments triggered this
+            for (const ailmentName of profile.ailments) {
+                for (const cat of AILMENTS_DATA) {
+                    const item = cat.items.find(i => i.name === ailmentName);
+                    if (item) {
+                        const matches = item.avoid.some(a =>
+                            a.toLowerCase() === matchL ||
+                            a.toLowerCase().includes(matchL) ||
+                            matchL.includes(a.toLowerCase())
+                        );
+                        if (matches) {
+                            reasons.ailments.push({ name: ailmentName, icon: item.icon });
+                        }
+                    }
+                }
+            }
+
+            // Check preferences
+            const matchedPref = profile.preferences.find(p =>
+                p.toLowerCase() === matchL ||
+                p.toLowerCase().includes(matchL) ||
+                matchL.includes(p.toLowerCase())
+            );
+            if (matchedPref) {
+                reasons.preferences.push(matchedPref);
+            }
+
+            return reasons;
+        }
+
+        function analyzeIngredients() {
+            const ingredientsText = document.getElementById('ingredients').value;
+            const avoidList = getAvoidList();
+
+            // Parse ingredients
+            const ingredientsList = ingredientsText
+                .split(',')
+                .map(i => i.trim())
+                .filter(Boolean);
+
+            console.log('Ingredients to check:', ingredientsList);
+            console.log('Avoid list:', avoidList);
+
+            const flagged = [];
+
+            // Check each ingredient
+            for (const ing of ingredientsList) {
+                const ingL = ing.toLowerCase();
+
+                for (const avoid of avoidList) {
+                    const avoidL = avoid.toLowerCase();
+
+                    // Flexible matching: check if ingredient contains avoid term or vice versa
+                    const isMatch =
+                        ingL.includes(avoidL) ||
+                        avoidL.includes(ingL) ||
+                        (ingL.includes('paraben') && avoidL.includes('paraben')) ||
+                        (ingL.includes('sulfate') && avoidL.includes('sulfate')) ||
+                        (ingL.includes('sls') && avoidL.includes('sls'));
+
+                    if (isMatch) {
+                        const reasons = getIngredientReasons(avoid);
+                        flagged.push({
+                            ingredient: ing,
+                            matchedAvoid: avoid,
+                            reasons: reasons
+                        });
+                        break;  // Only flag once per ingredient
+                    }
+                }
+            }
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+
+            if (flagged.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="section">
+                        <div class="safe">
+                            ✅ <strong>Looks Good!</strong><br>
+                            No flagged ingredients found. This product appears safe based on your profile.
+                        </div>
+                    </div>
+                `;
+            } else {
+                let html = `
+                    <div class="section">
+                        <h3>⚠️ ${flagged.length} Ingredient${flagged.length !== 1 ? 's' : ''} Flagged</h3>
+                `;
+
+                for (const f of flagged) {
+                    let reasonHTML = '';
+
+                    if (f.reasons.ailments.length > 0) {
+                        reasonHTML += f.reasons.ailments.map(a =>
+                            `<span class="reason-badge">${a.icon} ${a.name}</span>`
+                        ).join('');
+                    }
+
+                    if (f.reasons.preferences.length > 0) {
+                        reasonHTML += f.reasons.preferences.map(p =>
+                            `<span class="reason-badge">🚫 ${p}</span>`
+                        ).join('');
+                    }
+
+                    html += `
+                        <div class="flagged">
+                            <div class="flagged-name">${f.ingredient}</div>
+                            <div class="flagged-match">Matches: "${f.matchedAvoid}"</div>
+                            <div class="flagged-reason">
+                                <strong>Reason:</strong> ${reasonHTML}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+                resultsDiv.innerHTML = html;
+            }
+        }
+
+        // Run analysis on load
+        analyzeIngredients();
+    </script>
+</body>
+</html>
