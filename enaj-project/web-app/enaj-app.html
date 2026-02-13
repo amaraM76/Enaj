@@ -716,6 +716,27 @@
     }
 
     function HomeScreen({ userName, ailments, avoidList, onOpenExtDemo, onEditAilments, onEditPrefs, onOpenMonitoring }) {
+      const [copyTokenMessage, setCopyTokenMessage] = useState("");
+      const copyConnectionToken = () => {
+        const token = typeof window !== "undefined" && window.enajApi && window.enajApi.token ? window.enajApi.token : (typeof localStorage !== "undefined" ? localStorage.getItem("enaj_auth_token") : null);
+        if (!token) {
+          setCopyTokenMessage("Not signed in. Complete setup first.");
+          setTimeout(() => setCopyTokenMessage(""), 3000);
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(token).then(() => {
+            setCopyTokenMessage("Copied! Paste this in the extension → Link to Enaj.");
+            setTimeout(() => setCopyTokenMessage(""), 4000);
+          }).catch(() => {
+            setCopyTokenMessage("Could not copy. Copy the token from the address bar or console.");
+            setTimeout(() => setCopyTokenMessage(""), 4000);
+          });
+        } else {
+          setCopyTokenMessage("Copy not supported in this browser.");
+          setTimeout(() => setCopyTokenMessage(""), 3000);
+        }
+      };
       return (
         <div style={{ padding: "20px 20px 40px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
@@ -757,6 +778,13 @@
               </div>
               <span style={{ color: TIFFANY_DARK, fontSize: 20, fontWeight: 600 }}>›</span>
             </div>
+          </div>
+
+          <div style={{ background: "white", borderRadius: 16, padding: 18, border: "1px solid #f0f0f0", marginBottom: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#3a4a4e", marginBottom: 8 }}>Connect browser extension</h3>
+            <p style={{ fontSize: 12, color: "#7a8a8e", marginBottom: 12, lineHeight: 1.5 }}>Link the Enaj extension to this account so your profile and scan history stay in sync.</p>
+            <button onClick={copyConnectionToken} style={{ background: `linear-gradient(135deg, ${TIFFANY}, ${SEAMOSS})`, color: "white", border: "none", padding: "10px 18px", borderRadius: 25, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Libre Franklin', sans-serif" }}>Copy connection token</button>
+            {copyTokenMessage && <p style={{ fontSize: 12, color: copyTokenMessage.startsWith("Copied") ? SEAMOSS_DARK : "#666", marginTop: 10, fontWeight: 500 }}>{copyTokenMessage}</p>}
           </div>
 
           <div style={{ background: "white", borderRadius: 16, padding: 18, border: "1px solid #f0f0f0" }}>
